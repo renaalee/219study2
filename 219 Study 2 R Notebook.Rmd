@@ -1,0 +1,81 @@
+---
+title: "COGS 219 Study 2 Results"
+output: html_notebook
+---
+ 
+###DEMOGRAPHIC DATA
+- 126 total participants were recruited for this study. Two participants were excluded from this analysis for indicating that they have experience in a language other than English (5aa7c393f6dfdd0001eb0f87 and 5a831192000dab00018c89a8). Three participants were excluded from this analysis for entering erroneous answers to the demographic question concerning years of musical experience (5992503a0675b100014daefa, 5abc517c1667e40001d80d68, and 59d7beb67cf1800001d4dcb7).Three participants were excluded for performing the task incorrectly (5601478877f33b0010cb2bfc, 5a2bf45129374e000141fe16, 59634af44d00a70001bf38bd). The data from two participants appeared in either demographic data or raw data, but not both, (due to program error) so they were also excluded (571a7bae6a1c6300134b9a78 and 57b8e70f35624400013d690c). After these exclusions, a total of 117 participants were included in this analysis. 
+
+######Filtering Data and Loading Packages
+```{r warning=FALSE}
+library(dplyr)
+library(jsonlite)
+library(readr)
+
+dem_data <- read.csv('prolific_export_5abe91ad0527ba0001c1df64.csv', header = TRUE, stringsAsFactors = FALSE)
+dem_data <- dem_data[order(dem_data$participant_id),]
+dem_data$subjectID <- factor(dem_data$participant_id)
+filt_dem_data <- dem_data %>% filter(!participant_id %in% c('5992503a0675b100014daefa', '5abc517c1667e40001d80d68', '59d7beb67cf1800001d4dcb7', '5a831192000dab00018c89a8', '5aa7c393f6dfdd0001eb0f87', '5601478877f33b0010cb2bfc', '5a2bf45129374e000141fe16', '59634af44d00a70001bf38bd')) 
+filt_dem_data <- filt_dem_data %>% filter(status %in% 'Approved')
+
+raw_data <- read_csv('raw_data.csv')
+raw_data <- raw_data[order(raw_data$subjectID),]
+filt_data <- raw_data %>% filter(!subjectID %in% c('5992503a0675b100014daefa', '5abc517c1667e40001d80d68', '59d7beb67cf1800001d4dcb7', '5a831192000dab00018c89a8', '59634af44d00a70001bf38bd', '5a2bf45129374e000141fe16', '5601478877f33b0010cb2bfc', '571a7bae6a1c6300134b9a78', '57b8e70f35624400013d690c'))
+```
+
+####Demographic Statistics
+```{r}
+music_exp <- filt_data %>% filter(trial_type == "survey-text") %>%
+  group_by(subjectID) %>% mutate(YearsExperience = fromJSON(responses)$Q0)
+music_exp$YearsExperience[music_exp$YearsExperience == 'zero'] <- '0'
+music_exp$YearsExperience <- as.numeric(music_exp$YearsExperience)
+
+dem_summary <- data.frame(MeanAge = round(mean(filt_dem_data$age), 2), SDAge = round(sd(filt_dem_data$age), 2), MeanYearsExperience = round(mean(music_exp$YearsExperience), 2), SDYearsExperience = round(sd(music_exp$YearsExperience), 2))
+dem_summary
+```
+<br>
+
+####Gender Frequencies
+There were `r table(filt_dem_data$sex)[['Female']]` female and `r table(filt_dem_data$sex)[['Male']]` male participants in the study. 
+<br>
+
+###BEHAVIORAL DATA
+
+####Pitch Scores
+```{r}
+pitch_score_data <- filt_data %>% filter(!num_pitch_level == "NULL")
+pitch_score_data$num_pitch_level <- as.numeric(as.character(pitch_score_data$num_pitch_level))
+pitch_score <- pitch_score_data %>% filter(internal_node_id %in% c('0.0-5.12-3.12', '0.0-5.13-3.13', '0.0-5.14-3.14', '0.0-5.15-3.15', '0.0-5.16-3.16', '0.0-5.17-3.17', '0.0-5.18-3.18', '0.0-5.19-3.19')) %>% group_by(subjectID) %>% summarize(pitch_score = mean(num_pitch_level))
+pitch_score
+
+mean_pitch_score <- pitch_score %>% summarize(MeanPitchScore = round(mean(pitch_score), 2), SD = round(sd(pitch_score), 2))
+mean_pitch_score
+```
+
+####Emotional ID Scores
+```{r}
+emo_data <- filt_data %>% filter(trial_type == "survey-multi-choice") %>%
+  group_by(subjectID, trial_index) %>% mutate(Response = fromJSON(responses)$Q0) %>% 
+  mutate(Correct = (correct_response == Response))
+
+emo_score <- emo_data %>% group_by(subjectID) %>% summarize(ProportionCorrect = (mean(Correct)))
+emo_score
+mean_emo_score <- emo_score %>% summarize(MeanProportionCorrect = round(mean(ProportionCorrect), 2), SD = round(sd(ProportionCorrect), 2))
+mean_emo_score
+```
+
+####Data Summary
+```{r}
+data_summary <- data.frame(SubjectID = emo_score$subjectID, YearsExperience = music_exp$YearsExperience, PitchScore = pitch_score, EmotionIDScore = emo_score)
+data_summary$PitchScore <- data_summary$PitchScore.pitch_score
+data_summary$EmotionIDScore <- data_summary$EmotionIDScore.ProportionCorrect
+data_summary$PitchScore.pitch_score <- NULL
+data_summary$EmotionIDScore.ProportionCorrect <- NULL
+data_summary$PitchScore.subjectID <- NULL
+data_summary$EmotionIDScore.subjectID <- NULL
+data_summary
+
+write.csv(data_summary, 'data_summary.csv')
+```
+
+
